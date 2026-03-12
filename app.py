@@ -3,6 +3,7 @@
 运行：streamlit run app.py
 """
 
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -20,6 +21,37 @@ from resume_tailor.src.resume_tailor import (
     apply_modifications,
     get_resume_content,
 )
+
+# ── 配置文件路径 ───────────────────────────────────────────────────────────────
+
+CONFIG_DIR        = Path.home() / ".resume-tailor"
+CONFIG_PATH       = CONFIG_DIR / "config.json"
+SAVED_RESUME_PATH = CONFIG_DIR / "base_resume.docx"
+
+# ── 配置读写 ──────────────────────────────────────────────────────────────────
+
+
+def load_saved_config() -> dict:
+    if not CONFIG_PATH.exists():
+        return {}
+    try:
+        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_config(user_name: str, api_key: str, base_url: str, model: str) -> None:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    resume_path_str = str(SAVED_RESUME_PATH) if SAVED_RESUME_PATH.exists() else ""
+    cfg = {
+        "user_name": user_name,
+        "resume_path": resume_path_str,
+        "llm": {"api_key": api_key, "base_url": base_url, "model": model},
+    }
+    CONFIG_PATH.write_text(
+        json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
 
 # ── API 服务商预设 ────────────────────────────────────────────────────────────
 
@@ -93,6 +125,19 @@ def _generate_greeting(client: OpenAI, model: str, jd: str, resume_paras: list) 
 # ── 页面配置 ──────────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="简历定制工具", page_icon="📄", layout="wide")
+
+# ── 会话状态初始化（每次新 session 从磁盘读一次配置）────────────────────────
+
+if "config_loaded" not in st.session_state:
+    cfg = load_saved_config()
+    llm = cfg.get("llm", {})
+    st.session_state.saved_user_name     = cfg.get("user_name", "")
+    st.session_state.saved_api_key       = llm.get("api_key", "")
+    st.session_state.saved_base_url      = llm.get("base_url", "")
+    st.session_state.saved_model         = llm.get("model", "")
+    st.session_state.saved_resume_exists = SAVED_RESUME_PATH.exists()
+    st.session_state.config_loaded       = True
+
 st.title("📄 简历定制工具")
 st.caption("上传简历 + 粘贴 JD，自动生成针对性修改建议，确认后下载定制版 Word 简历")
 
@@ -103,162 +148,295 @@ with st.sidebar:
     provider = st.selectbox("服务商", list(PRESET_APIS.keys()))
     default_base_url, default_model = PRESET_APIS[provider]
 
-    api_key = st.text_input("API Key", type="password", placeholder="sk-...")
-    base_url = st.text_input("Base URL", value=default_base_url)
-    model_name = st.text_input("模型", value=default_model)
+    _saved_url   = st.session_state.get("saved_base_url", "") or default_base_url
+    _saved_model = st.session_state.get("saved_model",    "") or default_model
+
+    api_key    = st.text_input("API Key", type="password",
+                                value=st.session_state.get("saved_api_key", ""),
+                                placeholder="sk-...")
+    base_url   = st.text_input("Base URL", value=_saved_url)
+    model_name = st.text_input("模型", value=_saved_model)
 
     st.divider()
-    st.caption("API Key 仅在本次会话内存中使用，不会被存储或上传。")
+    st.caption("API Key 仅在本次会话内存中使用，不会被上传。如需持久保存，请在「⚙️ 设置」中配置。")
 
-# ── 第一步：上传简历 + 填写 JD ───────────────────────────────────────────────
+# ── 主体：标签页 ──────────────────────────────────────────────────────────────
 
-st.subheader("第一步：上传简历和岗位描述")
-col1, col2 = st.columns(2)
+tab_main, tab_settings = st.tabs(["📝 简历定制", "⚙️ 设置"])
 
-with col1:
-    uploaded_file = st.file_uploader("基础简历（.docx）", type=["docx"])
-    job_name = st.text_input("岗位名称", placeholder="如：AI产品经理、数据分析师")
+# ════════════════════════════════════════════════════════════════════════════
+# 简历定制标签页
+# ════════════════════════════════════════════════════════════════════════════
 
-with col2:
-    jd_text = st.text_area("岗位描述（JD）", height=280, placeholder="将招聘 JD 粘贴到这里...")
+with tab_main:
 
-# ── 分析按钮 ──────────────────────────────────────────────────────────────────
+    # 首次使用提示
+    if not (st.session_state.get("saved_api_key") and
+            st.session_state.get("saved_user_name")):
+        st.warning(
+            "尚未完成初始设置。请前往「⚙️ 设置」标签页填写您的姓名和 API 配置，"
+            "然后点击「保存设置」，下次打开无需重新填写。",
+            icon="⚠️",
+        )
 
-api_ready = bool(api_key.strip() and base_url.strip() and model_name.strip())
-inputs_ready = bool(uploaded_file and jd_text.strip())
+    # ── 第一步：上传简历 + 填写 JD ───────────────────────────────────────────
 
-if not api_ready:
-    st.info("请在左侧填写 API 配置。")
+    st.subheader("第一步：上传简历和岗位描述")
+    col1, col2 = st.columns(2)
 
-if st.button(
-    "🔍 分析并生成修改建议",
-    disabled=not (api_ready and inputs_ready),
-    type="primary",
-):
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp_path = Path(tmpdir) / "resume.docx"
-        tmp_path.write_bytes(uploaded_file.getvalue())
+    with col1:
+        if st.session_state.get("saved_resume_exists"):
+            use_saved = st.checkbox("使用已保存的简历", value=True)
+            if use_saved:
+                uploaded_file = None
+                st.caption(f"已保存：{SAVED_RESUME_PATH.name}")
+            else:
+                uploaded_file = st.file_uploader("基础简历（.docx）", type=["docx"])
+        else:
+            uploaded_file = st.file_uploader("基础简历（.docx）", type=["docx"])
+        job_name = st.text_input("岗位名称", placeholder="如：AI产品经理、数据分析师")
 
-        with st.spinner("正在读取简历并调用 LLM 分析 JD..."):
-            try:
-                client = OpenAI(api_key=api_key, base_url=base_url)
-                resume_paras = get_resume_content(tmp_path)
-                modifications = _call_llm(client, model_name, jd_text, resume_paras)
+    with col2:
+        jd_text = st.text_area("岗位描述（JD）", height=280, placeholder="将招聘 JD 粘贴到这里...")
 
-                st.session_state.update(
-                    resume_paras=resume_paras,
-                    modifications=modifications,
-                    resume_bytes=uploaded_file.getvalue(),
-                    jd_text=jd_text,
-                    job_name=job_name.strip() or "定制版",
-                    api_key=api_key,
-                    base_url=base_url,
-                    model_name=model_name,
-                    output_bytes=None,
-                )
-            except Exception as e:
-                st.error(f"分析失败：{e}")
+    # ── 分析按钮 ──────────────────────────────────────────────────────────────
 
-# ── 第二步：审阅修改建议 ───────────────────────────────────────────────────────
-
-if st.session_state.get("modifications"):
-    st.divider()
-    st.subheader("第二步：审阅修改建议")
-
-    mods = st.session_state.modifications
-    paras = st.session_state.resume_paras
-    orig_map = {p["index"]: p["text"] for p in paras}
-
-    for i, m in enumerate(mods, 1):
-        orig = orig_map.get(m["para_index"], "（未找到）")
-        new_text = "".join(s["text"] for s in m.get("segments", []))
-        with st.expander(
-            f"[{i}] 段落 {m['para_index']} — {m.get('reason', '')}",
-            expanded=True,
-        ):
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("**原文**")
-                st.text(orig)
-            with c2:
-                st.markdown("**修改后**")
-                st.text(new_text)
-
-    # 反馈 + 重新生成
-    feedback = st.text_input(
-        "有修改意见？输入后点击「重新生成」；无意见直接点「确认生成」。"
+    api_ready = bool(api_key.strip() and base_url.strip() and model_name.strip())
+    inputs_ready = bool(
+        (uploaded_file or st.session_state.get("saved_resume_exists"))
+        and jd_text.strip()
     )
 
-    col_regen, col_confirm, _ = st.columns([1, 1, 2])
+    if not api_ready:
+        st.info("请在左侧填写 API 配置（或在「⚙️ 设置」中保存配置）。")
 
-    with col_regen:
-        if st.button("🔄 重新生成", disabled=not feedback.strip()):
-            with st.spinner("正在根据您的意见重新生成..."):
+    if st.button(
+        "🔍 分析并生成修改建议",
+        disabled=not (api_ready and inputs_ready),
+        type="primary",
+    ):
+        # 解析简历字节
+        if uploaded_file is not None:
+            resume_bytes = uploaded_file.getvalue()
+        elif st.session_state.get("saved_resume_exists"):
+            resume_bytes = SAVED_RESUME_PATH.read_bytes()
+        else:
+            st.error("请上传简历文件。")
+            st.stop()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "resume.docx"
+            tmp_path.write_bytes(resume_bytes)
+
+            with st.spinner("正在读取简历并调用 LLM 分析 JD..."):
+                try:
+                    client = OpenAI(api_key=api_key, base_url=base_url)
+                    resume_paras = get_resume_content(tmp_path)
+                    modifications = _call_llm(client, model_name, jd_text, resume_paras)
+
+                    st.session_state.update(
+                        resume_paras=resume_paras,
+                        modifications=modifications,
+                        resume_bytes=resume_bytes,
+                        jd_text=jd_text,
+                        job_name=job_name.strip() or "定制版",
+                        api_key=api_key,
+                        base_url=base_url,
+                        model_name=model_name,
+                        output_bytes=None,
+                    )
+                except Exception as e:
+                    st.error(f"分析失败：{e}")
+
+    # ── 第二步：审阅修改建议 ───────────────────────────────────────────────────
+
+    if st.session_state.get("modifications"):
+        st.divider()
+        st.subheader("第二步：审阅修改建议")
+
+        mods = st.session_state.modifications
+        paras = st.session_state.resume_paras
+        orig_map = {p["index"]: p["text"] for p in paras}
+
+        for i, m in enumerate(mods, 1):
+            orig = orig_map.get(m["para_index"], "（未找到）")
+            new_text = "".join(s["text"] for s in m.get("segments", []))
+            with st.expander(
+                f"[{i}] 段落 {m['para_index']} — {m.get('reason', '')}",
+                expanded=True,
+            ):
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown("**原文**")
+                    st.text(orig)
+                with c2:
+                    st.markdown("**修改后**")
+                    st.text(new_text)
+
+        # 反馈 + 重新生成
+        feedback = st.text_input(
+            "有修改意见？输入后点击「重新生成」；无意见直接点「确认生成」。"
+        )
+
+        col_regen, col_confirm, _ = st.columns([1, 1, 2])
+
+        with col_regen:
+            if st.button("🔄 重新生成", disabled=not feedback.strip()):
+                with st.spinner("正在根据您的意见重新生成..."):
+                    try:
+                        client = OpenAI(
+                            api_key=st.session_state.api_key,
+                            base_url=st.session_state.base_url,
+                        )
+                        new_mods = _call_llm_with_feedback(
+                            client,
+                            st.session_state.model_name,
+                            st.session_state.jd_text,
+                            st.session_state.resume_paras,
+                            st.session_state.modifications,
+                            feedback,
+                        )
+                        st.session_state.modifications = new_mods
+                        st.session_state.output_bytes = None
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"重新生成失败：{e}")
+
+        with col_confirm:
+            if st.button("✅ 确认，生成 Word 简历", type="primary"):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    base_path = Path(tmpdir) / "base.docx"
+                    output_path = Path(tmpdir) / f"简历_{st.session_state.job_name}版.docx"
+                    base_path.write_bytes(st.session_state.resume_bytes)
+
+                    try:
+                        apply_modifications(
+                            base_path, st.session_state.modifications, output_path
+                        )
+                        st.session_state.output_bytes = output_path.read_bytes()
+                    except Exception as e:
+                        st.error(f"生成失败：{e}")
+
+    # ── 第三步：下载 ──────────────────────────────────────────────────────────
+
+    if st.session_state.get("output_bytes"):
+        st.divider()
+        st.subheader("第三步：下载简历")
+        st.success("定制版简历已生成！")
+
+        file_name = f"简历_{st.session_state.job_name}版.docx"
+        st.download_button(
+            label="⬇️ 下载 Word 简历（.docx）",
+            data=st.session_state.output_bytes,
+            file_name=file_name,
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            type="primary",
+        )
+        st.caption("下载后在 Word 中打开，手动导出 PDF。")
+
+        st.divider()
+        if st.button("✉️ 生成 BOSS 直聘打招呼消息"):
+            with st.spinner("正在生成..."):
                 try:
                     client = OpenAI(
                         api_key=st.session_state.api_key,
                         base_url=st.session_state.base_url,
                     )
-                    new_mods = _call_llm_with_feedback(
+                    greeting = _generate_greeting(
                         client,
                         st.session_state.model_name,
                         st.session_state.jd_text,
                         st.session_state.resume_paras,
-                        st.session_state.modifications,
-                        feedback,
                     )
-                    st.session_state.modifications = new_mods
-                    st.session_state.output_bytes = None
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"重新生成失败：{e}")
-
-    with col_confirm:
-        if st.button("✅ 确认，生成 Word 简历", type="primary"):
-            with tempfile.TemporaryDirectory() as tmpdir:
-                base_path = Path(tmpdir) / "base.docx"
-                output_path = Path(tmpdir) / f"简历_{st.session_state.job_name}版.docx"
-                base_path.write_bytes(st.session_state.resume_bytes)
-
-                try:
-                    apply_modifications(
-                        base_path, st.session_state.modifications, output_path
-                    )
-                    st.session_state.output_bytes = output_path.read_bytes()
+                    st.text_area("打招呼消息（可直接复制）", value=greeting, height=150)
                 except Exception as e:
                     st.error(f"生成失败：{e}")
 
-# ── 第三步：下载 ──────────────────────────────────────────────────────────────
+# ════════════════════════════════════════════════════════════════════════════
+# 设置标签页
+# ════════════════════════════════════════════════════════════════════════════
 
-if st.session_state.get("output_bytes"):
-    st.divider()
-    st.subheader("第三步：下载简历")
-    st.success("定制版简历已生成！")
+with tab_settings:
+    st.subheader("⚙️ 设置")
+    st.caption(f"配置保存至 `{CONFIG_PATH}`，重启应用后自动加载，无需重复填写。")
 
-    file_name = f"简历_{st.session_state.job_name}版.docx"
-    st.download_button(
-        label="⬇️ 下载 Word 简历（.docx）",
-        data=st.session_state.output_bytes,
-        file_name=file_name,
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        type="primary",
-    )
-    st.caption("下载后在 Word 中打开，手动导出 PDF。")
+    with st.form("settings_form"):
+        st.markdown("##### 基本信息")
+        s_user_name = st.text_input(
+            "姓名（用于输出文件命名）",
+            value=st.session_state.get("saved_user_name", ""),
+            placeholder="如：张三",
+        )
 
-    st.divider()
-    if st.button("✉️ 生成 BOSS 直聘打招呼消息"):
-        with st.spinner("正在生成..."):
+        st.markdown("##### 默认简历")
+        s_resume_file = st.file_uploader(
+            "上传默认简历（.docx）— 留空则保留现有文件",
+            type=["docx"],
+            key="settings_resume",
+        )
+        if st.session_state.get("saved_resume_exists"):
             try:
-                client = OpenAI(
-                    api_key=st.session_state.api_key,
-                    base_url=st.session_state.base_url,
-                )
-                greeting = _generate_greeting(
-                    client,
-                    st.session_state.model_name,
-                    st.session_state.jd_text,
-                    st.session_state.resume_paras,
-                )
-                st.text_area("打招呼消息（可直接复制）", value=greeting, height=150)
-            except Exception as e:
-                st.error(f"生成失败：{e}")
+                size_kb = SAVED_RESUME_PATH.stat().st_size // 1024
+                st.caption(f"当前已保存：{SAVED_RESUME_PATH.name}（{size_kb} KB）")
+            except OSError:
+                pass
+
+        st.markdown("##### API 配置")
+        s_provider = st.selectbox(
+            "服务商",
+            list(PRESET_APIS.keys()),
+            key="settings_provider",
+        )
+        s_def_url, s_def_model = PRESET_APIS[s_provider]
+
+        s_api_key = st.text_input(
+            "API Key",
+            value=st.session_state.get("saved_api_key", ""),
+            type="password",
+            placeholder="sk-...",
+        )
+        s_base_url = st.text_input(
+            "Base URL",
+            value=st.session_state.get("saved_base_url", "") or s_def_url,
+        )
+        s_model = st.text_input(
+            "模型",
+            value=st.session_state.get("saved_model", "") or s_def_model,
+        )
+
+        submitted = st.form_submit_button("💾 保存设置", type="primary")
+
+    if submitted:
+        errors = []
+        if not s_user_name.strip():
+            errors.append("姓名不能为空")
+        if not s_api_key.strip():
+            errors.append("API Key 不能为空")
+        if not s_base_url.strip():
+            errors.append("Base URL 不能为空")
+        if not s_model.strip():
+            errors.append("模型名称不能为空")
+
+        if errors:
+            for e in errors:
+                st.error(e)
+        else:
+            if s_resume_file is not None:
+                CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+                SAVED_RESUME_PATH.write_bytes(s_resume_file.getvalue())
+                st.session_state.saved_resume_exists = True
+
+            save_config(
+                user_name=s_user_name.strip(),
+                api_key=s_api_key.strip(),
+                base_url=s_base_url.strip(),
+                model=s_model.strip(),
+            )
+
+            st.session_state.saved_user_name = s_user_name.strip()
+            st.session_state.saved_api_key   = s_api_key.strip()
+            st.session_state.saved_base_url  = s_base_url.strip()
+            st.session_state.saved_model     = s_model.strip()
+
+            st.success("设置已保存 ✓ 侧边栏 API 配置将在下次操作时自动生效。")
+            st.rerun()
