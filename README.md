@@ -19,6 +19,20 @@
 
 ---
 
+## 第零步：下载项目文件
+
+### 方式一：下载 ZIP
+
+前往 [项目页面](https://github.com/polaris-lo/ai-resume-tailor-public) 下载文件到本地。
+
+### 方式二：git clone
+
+```bash
+git clone https://github.com/polaris-lo/ai-resume-tailor-public.git ~/Documents/ai-resume-tailor-public
+```
+
+---
+
 ## 首次安装依赖
 
 > 注意：所有命令都需要先进入项目文件夹后再运行，否则会提示"找不到文件"。
