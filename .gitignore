@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+
+# 敏感数据（绝对不提交）
+*.enc
+*.key
+.env
+.env.*
+
+# 简历文件（通过路径引用，不提交原文件）
+*.docx
+*.pdf
+output/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code 本地设置（含个人权限配置）
+.claude/settings.local.json
