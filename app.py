@@ -3,7 +3,6 @@
 运行：streamlit run app.py
 """
 
-import json
 import sys
 import tempfile
 from pathlib import Path
@@ -22,37 +21,6 @@ from resume_tailor.src.resume_tailor import (
     get_resume_content,
 )
 
-# ── 配置文件路径 ───────────────────────────────────────────────────────────────
-
-CONFIG_DIR        = Path.home() / ".resume-tailor"
-CONFIG_PATH       = CONFIG_DIR / "config.json"
-SAVED_RESUME_PATH = CONFIG_DIR / "base_resume.docx"
-
-# ── 配置读写 ──────────────────────────────────────────────────────────────────
-
-
-def load_saved_config() -> dict:
-    if not CONFIG_PATH.exists():
-        return {}
-    try:
-        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-
-def save_config(user_name: str, api_key: str, base_url: str, model: str) -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    resume_path_str = str(SAVED_RESUME_PATH) if SAVED_RESUME_PATH.exists() else ""
-    cfg = {
-        "user_name": user_name,
-        "resume_path": resume_path_str,
-        "llm": {"api_key": api_key, "base_url": base_url, "model": model},
-    }
-    CONFIG_PATH.write_text(
-        json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
-
 # ── API 服务商预设 ────────────────────────────────────────────────────────────
 
 PRESET_APIS = {
@@ -62,7 +30,8 @@ PRESET_APIS = {
     "自定义": ("", ""),
 }
 
-# ── LLM 调用（不依赖 config.py，直接接收 client）────────────────────────────
+# ── LLM 调用 ──────────────────────────────────────────────────────────────────
+
 
 def _call_llm(client: OpenAI, model: str, jd: str, resume_paras: list) -> list:
     user_msg = f"【岗位描述】\n{jd}\n\n【当前简历段落】\n{_build_resume_str(resume_paras)}"
@@ -126,21 +95,6 @@ def _generate_greeting(client: OpenAI, model: str, jd: str, resume_paras: list) 
 
 st.set_page_config(page_title="简历定制工具", page_icon="📄", layout="wide")
 
-# ── 会话状态初始化（每次新 session 从磁盘读一次配置）────────────────────────
-
-if "config_loaded" not in st.session_state:
-    cfg = load_saved_config()
-    llm = cfg.get("llm", {})
-    st.session_state.saved_user_name     = cfg.get("user_name", "")
-    st.session_state.saved_api_key       = llm.get("api_key", "")
-    st.session_state.saved_base_url      = llm.get("base_url", "")
-    st.session_state.saved_model         = llm.get("model", "")
-    st.session_state.saved_resume_exists = SAVED_RESUME_PATH.exists()
-    st.session_state.config_loaded       = True
-
-st.title("📄 简历定制工具")
-st.caption("上传简历 + 粘贴 JD，自动生成针对性修改建议，确认后下载定制版 Word 简历")
-
 # ── 侧边栏：API 配置 ──────────────────────────────────────────────────────────
 
 with st.sidebar:
@@ -158,9 +112,12 @@ with st.sidebar:
     model_name = st.text_input("模型", value=_saved_model)
 
     st.divider()
-    st.caption("API Key 仅在本次会话内存中使用，不会被上传。如需持久保存，请在「⚙️ 设置」中配置。")
+    st.caption("API Key 仅在本次会话内存中使用，不会上传至服务器。")
 
 # ── 主体：标签页 ──────────────────────────────────────────────────────────────
+
+st.title("📄 简历定制工具")
+st.caption("上传简历 + 粘贴 JD，自动生成针对性修改建议，确认后下载定制版 Word 简历")
 
 tab_main, tab_settings = st.tabs(["📝 简历定制", "⚙️ 设置"])
 
@@ -175,7 +132,7 @@ with tab_main:
             st.session_state.get("saved_user_name")):
         st.warning(
             "尚未完成初始设置。请前往「⚙️ 设置」标签页填写您的姓名和 API 配置，"
-            "然后点击「保存设置」，下次打开无需重新填写。",
+            "然后点击「保存设置」。",
             icon="⚠️",
         )
 
@@ -185,15 +142,7 @@ with tab_main:
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.session_state.get("saved_resume_exists"):
-            use_saved = st.checkbox("使用已保存的简历", value=True)
-            if use_saved:
-                uploaded_file = None
-                st.caption(f"已保存：{SAVED_RESUME_PATH.name}")
-            else:
-                uploaded_file = st.file_uploader("基础简历（.docx）", type=["docx"])
-        else:
-            uploaded_file = st.file_uploader("基础简历（.docx）", type=["docx"])
+        uploaded_file = st.file_uploader("基础简历（.docx）", type=["docx"])
         job_name = st.text_input("岗位名称", placeholder="如：AI产品经理、数据分析师")
 
     with col2:
@@ -201,11 +150,8 @@ with tab_main:
 
     # ── 分析按钮 ──────────────────────────────────────────────────────────────
 
-    api_ready = bool(api_key.strip() and base_url.strip() and model_name.strip())
-    inputs_ready = bool(
-        (uploaded_file or st.session_state.get("saved_resume_exists"))
-        and jd_text.strip()
-    )
+    api_ready    = bool(api_key.strip() and base_url.strip() and model_name.strip())
+    inputs_ready = bool(uploaded_file and jd_text.strip())
 
     if not api_ready:
         st.info("请在左侧填写 API 配置（或在「⚙️ 设置」中保存配置）。")
@@ -215,14 +161,7 @@ with tab_main:
         disabled=not (api_ready and inputs_ready),
         type="primary",
     ):
-        # 解析简历字节
-        if uploaded_file is not None:
-            resume_bytes = uploaded_file.getvalue()
-        elif st.session_state.get("saved_resume_exists"):
-            resume_bytes = SAVED_RESUME_PATH.read_bytes()
-        else:
-            st.error("请上传简历文件。")
-            st.stop()
+        resume_bytes = uploaded_file.getvalue()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir) / "resume.docx"
@@ -324,7 +263,9 @@ with tab_main:
         st.subheader("第三步：下载简历")
         st.success("定制版简历已生成！")
 
-        file_name = f"简历_{st.session_state.job_name}版.docx"
+        user_name = st.session_state.get("saved_user_name", "")
+        file_prefix = f"{user_name}简历" if user_name else "简历"
+        file_name = f"{file_prefix}_{st.session_state.job_name}版.docx"
         st.download_button(
             label="⬇️ 下载 Word 简历（.docx）",
             data=st.session_state.output_bytes,
@@ -358,7 +299,7 @@ with tab_main:
 
 with tab_settings:
     st.subheader("⚙️ 设置")
-    st.caption(f"配置保存至 `{CONFIG_PATH}`，重启应用后自动加载，无需重复填写。")
+    st.caption("设置仅在本次会话内有效，关闭或刷新页面后需重新填写。")
 
     with st.form("settings_form"):
         st.markdown("##### 基本信息")
@@ -367,19 +308,6 @@ with tab_settings:
             value=st.session_state.get("saved_user_name", ""),
             placeholder="如：张三",
         )
-
-        st.markdown("##### 默认简历")
-        s_resume_file = st.file_uploader(
-            "上传默认简历（.docx）— 留空则保留现有文件",
-            type=["docx"],
-            key="settings_resume",
-        )
-        if st.session_state.get("saved_resume_exists"):
-            try:
-                size_kb = SAVED_RESUME_PATH.stat().st_size // 1024
-                st.caption(f"当前已保存：{SAVED_RESUME_PATH.name}（{size_kb} KB）")
-            except OSError:
-                pass
 
         st.markdown("##### API 配置")
         s_provider = st.selectbox(
@@ -421,18 +349,6 @@ with tab_settings:
             for e in errors:
                 st.error(e)
         else:
-            if s_resume_file is not None:
-                CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-                SAVED_RESUME_PATH.write_bytes(s_resume_file.getvalue())
-                st.session_state.saved_resume_exists = True
-
-            save_config(
-                user_name=s_user_name.strip(),
-                api_key=s_api_key.strip(),
-                base_url=s_base_url.strip(),
-                model=s_model.strip(),
-            )
-
             st.session_state.saved_user_name = s_user_name.strip()
             st.session_state.saved_api_key   = s_api_key.strip()
             st.session_state.saved_base_url  = s_base_url.strip()
