@@ -168,13 +168,14 @@ with tab_main:
     api_ready    = bool(api_key.strip() and base_url.strip() and model_name.strip())
     inputs_ready = bool(uploaded_file and jd_text.strip())
 
+    st.warning(
+        "⚠️ **请勿刷新或关闭此页面。**\n\n"
+        "本工具运行在云端，您填写的配置、上传的简历和分析结果均只保存在当前浏览器窗口中，"
+        "一旦刷新或关闭，所有数据将立即清空，需要重新开始。",
+        icon="⚠️",
+    )
     if not api_ready:
         st.info("请在左侧填写 API 配置（或在「⚙️ 设置」中保存配置）。")
-    else:
-        st.warning(
-            "⚠️ 分析和生成过程中请勿刷新或关闭页面，否则当前数据将丢失，需要重新开始。",
-            icon="⚠️",
-        )
 
     if st.button(
         "🔍 分析并生成修改建议",
