@@ -98,13 +98,14 @@ def _generate_greeting(client: OpenAI, model: str, jd: str, resume_paras: list) 
 
 st.set_page_config(page_title="简历定制工具", page_icon="📄", layout="wide")
 
-# ── 侧边栏：API 配置 ──────────────────────────────────────────────────────────
+# ── 侧边栏：配置信息 ──────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.header("API 配置")
-    _saved_key   = st.session_state.get("saved_api_key",  "")
-    _saved_url   = st.session_state.get("saved_base_url", "")
-    _saved_model = st.session_state.get("saved_model",    "")
+    st.header("配置信息")
+    _saved_key    = st.session_state.get("saved_api_key",     "")
+    _saved_url    = st.session_state.get("saved_base_url",    "")
+    _saved_model  = st.session_state.get("saved_model",       "")
+    _saved_prefix = st.session_state.get("saved_file_prefix", "")
 
     if _saved_key and _saved_url and _saved_model:
         provider_label = "自定义"
@@ -112,9 +113,13 @@ with st.sidebar:
             if _url and _url == _saved_url:
                 provider_label = _name
                 break
-        st.success(f"✅ 已配置：{provider_label} · {_saved_model}")
+        st.success("✅ 配置已完成")
+        st.caption(f"文件前缀：{_saved_prefix or '（未设置）'}")
+        st.caption(f"服务商：{provider_label}")
+        st.caption(f"Base URL：{_saved_url}")
+        st.caption(f"模型：{_saved_model}")
     else:
-        st.warning("尚未配置 API Key")
+        st.warning("尚未完成配置")
 
     st.caption("前往「⚙️ 设置」填写或修改配置。")
     st.divider()
@@ -139,12 +144,11 @@ tab_main, tab_settings = st.tabs(["📝 简历定制", "⚙️ 设置"])
 with tab_main:
 
     # 首次使用提示
-    if not (st.session_state.get("saved_api_key") and
-            st.session_state.get("saved_user_name")):
-        st.warning(
-            "尚未完成初始设置。请前往「⚙️ 设置」标签页填写您的姓名和 API 配置，"
+    if not st.session_state.get("saved_api_key"):
+        st.info(
+            "尚未完成初始设置。请前往「⚙️ 设置」标签页填写文件名前缀和 API 配置，"
             "然后点击「保存设置」。",
-            icon="⚠️",
+            icon="ℹ️",
         )
 
     # ── 第一步：上传简历 + 填写 JD ───────────────────────────────────────────
@@ -305,9 +309,10 @@ with tab_main:
         st.subheader("第三步：下载简历")
         st.success("定制版简历已生成！")
 
-        user_name = st.session_state.get("saved_user_name", "")
-        file_prefix = f"{user_name}简历" if user_name else "简历"
-        file_name = f"{file_prefix}_{st.session_state.job_name}版.docx"
+        from datetime import datetime as _dt
+        _prefix    = st.session_state.get("saved_file_prefix", "") or "简历"
+        _timestamp = _dt.now().strftime("%Y%m%d")
+        file_name  = f"{_prefix}_{st.session_state.job_name}_{_timestamp}.docx"
         st.download_button(
             label="⬇️ 下载 Word 简历（.docx）",
             data=st.session_state.output_bytes,
@@ -362,10 +367,12 @@ with tab_settings:
 
     with st.form("settings_form"):
         st.markdown("##### 基本信息")
-        s_user_name = st.text_input(
-            "姓名（用于输出文件命名）",
-            value=st.session_state.get("saved_user_name", ""),
-            placeholder="如：张三",
+        s_file_prefix = st.text_input(
+            "文件名前缀",
+            value=st.session_state.get("saved_file_prefix", ""),
+            placeholder="如：我的简历、张三",
+            help="生成的简历文件将命名为「前缀_岗位名_日期.docx」，例如「我的简历_产品经理_20260313.docx」。"
+                 "无需填写真实姓名，自定义即可。",
         )
 
         st.markdown("##### API 配置")
@@ -395,8 +402,8 @@ with tab_settings:
 
     if submitted:
         errors = []
-        if not s_user_name.strip():
-            errors.append("姓名不能为空")
+        if not s_file_prefix.strip():
+            errors.append("文件名前缀不能为空")
         if not s_api_key.strip():
             errors.append("API Key 不能为空")
         if not s_base_url.strip():
@@ -408,10 +415,10 @@ with tab_settings:
             for e in errors:
                 st.error(e)
         else:
-            st.session_state.saved_user_name = s_user_name.strip()
-            st.session_state.saved_api_key   = s_api_key.strip()
-            st.session_state.saved_base_url  = s_base_url.strip()
-            st.session_state.saved_model     = s_model.strip()
+            st.session_state.saved_file_prefix = s_file_prefix.strip()
+            st.session_state.saved_api_key     = s_api_key.strip()
+            st.session_state.saved_base_url    = s_base_url.strip()
+            st.session_state.saved_model       = s_model.strip()
 
-            st.success("设置已保存 ✓ 侧边栏 API 配置将在下次操作时自动生效。")
+            st.success("设置已保存 ✓ 侧边栏配置信息将在下次操作时自动更新。")
             st.rerun()
