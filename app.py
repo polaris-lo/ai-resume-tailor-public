@@ -310,9 +310,10 @@ with tab_main:
         st.success("定制版简历已生成！")
 
         from datetime import datetime as _dt
-        _prefix    = st.session_state.get("saved_file_prefix", "") or "简历"
-        _timestamp = _dt.now().strftime("%Y%m%d")
-        file_name  = f"{_prefix}_{st.session_state.job_name}_{_timestamp}.docx"
+        _prefix    = st.session_state.get("saved_file_prefix", "").strip()
+        _timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
+        _job       = st.session_state.job_name
+        file_name  = f"{_prefix}_{_job}_{_timestamp}.docx" if _prefix else f"{_job}_{_timestamp}.docx"
         st.download_button(
             label="⬇️ 下载 Word 简历（.docx）",
             data=st.session_state.output_bytes,
@@ -368,11 +369,15 @@ with tab_settings:
     with st.form("settings_form"):
         st.markdown("##### 基本信息")
         s_file_prefix = st.text_input(
-            "文件名前缀",
+            "文件名前缀（选填）",
             value=st.session_state.get("saved_file_prefix", ""),
-            placeholder="如：我的简历、张三",
-            help="生成的简历文件将命名为「前缀_岗位名_日期.docx」，例如「我的简历_产品经理_20260313.docx」。"
-                 "无需填写真实姓名，自定义即可。",
+            placeholder="如：我的简历、张三（留空亦可）",
+        )
+        st.caption(
+            "📄 文件命名规则：\n"
+            "- 未填写前缀：`产品经理_20260313_143022.docx`\n"
+            "- 填写前缀「我的简历」：`我的简历_产品经理_20260313_143022.docx`\n"
+            "无需填写真实姓名，自定义即可。"
         )
 
         st.markdown("##### API 配置")
@@ -402,8 +407,6 @@ with tab_settings:
 
     if submitted:
         errors = []
-        if not s_file_prefix.strip():
-            errors.append("文件名前缀不能为空")
         if not s_api_key.strip():
             errors.append("API Key 不能为空")
         if not s_base_url.strip():
