@@ -24,10 +24,13 @@ from resume_tailor.src.resume_tailor import (
 # ── API 服务商预设 ────────────────────────────────────────────────────────────
 
 PRESET_APIS = {
-    "DeepSeek": ("https://api.deepseek.com", "deepseek-chat"),
-    "OpenAI": ("https://api.openai.com/v1", "gpt-4o"),
-    "通义千问": ("https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-max"),
-    "自定义": ("", ""),
+    "DeepSeek":  ("https://api.deepseek.com",                           "deepseek-chat"),
+    "通义千问":   ("https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-max"),
+    "Kimi":      ("https://api.moonshot.cn/v1",                         "moonshot-v1-8k"),
+    "MiniMax":   ("https://api.minimax.chat/v1",                        "MiniMax-Text-01"),
+    "火山引擎":   ("https://ark.cn-beijing.volces.com/api/v3",           ""),  # 模型名因 endpoint 而异
+    "OpenAI":    ("https://api.openai.com/v1",                          "gpt-4o"),
+    "自定义":    ("", ""),
 }
 
 # ── LLM 调用 ──────────────────────────────────────────────────────────────────
@@ -113,6 +116,7 @@ with st.sidebar:
 
     st.divider()
     st.caption("API Key 仅在本次会话内存中使用，不会上传至服务器。")
+    st.caption("没有 Key？前往「⚙️ 设置」查看各平台免费领取教程。")
 
 # ── 主体：标签页 ──────────────────────────────────────────────────────────────
 
@@ -330,6 +334,23 @@ with tab_main:
 with tab_settings:
     st.subheader("⚙️ 设置")
     st.caption("设置仅在本次会话内有效，关闭或刷新页面后需重新填写。")
+
+    with st.expander("💡 没有 API Key？点此查看各平台免费领取教程", expanded=False):
+        st.markdown(
+            "| 平台 | 支持模型 | 免费额度 | 有效期 | 获取地址 |\n"
+            "|------|---------|---------|------|------|\n"
+            "| **字节火山引擎** | 豆包、DeepSeek、Kimi 等 | 每天 200 万 tokens（永久刷新） | 永久 | [console.volcengine.com/ark](https://console.volcengine.com/ark) |\n"
+            "| **阿里云百炼** | 通义千问、DeepSeek、Kimi 等 | 各模型 100 万 tokens | 3 个月 | [bailian.console.aliyun.com](https://bailian.console.aliyun.com) |\n"
+            "| **DeepSeek** | DeepSeek V3 / R1 | 注册送 10 元（约 500 万 tokens） | 1 个月 | [platform.deepseek.com](https://platform.deepseek.com) |\n"
+            "| **Kimi** | Kimi K2 系列 | 注册送 15 元 | 永久 | [platform.moonshot.cn](https://platform.moonshot.cn) |\n"
+            "| **MiniMax** | MiniMax M2 系列 | 注册送 15 元 | 永久 | [platform.minimaxi.com](https://platform.minimaxi.com) |\n"
+            "\n"
+            "**通用步骤（以 DeepSeek 为例）：**\n"
+            "1. 打开上方链接 → 注册账号（手机号即可）\n"
+            "2. 登录后进入「API Keys」→「创建 API Key」\n"
+            "3. 复制生成的 key（`sk-` 开头），粘贴到下方「API Key」输入框\n"
+            "4. 在「服务商」下拉框选择对应平台，Base URL 和模型名称会自动填入\n"
+        )
 
     with st.form("settings_form"):
         st.markdown("##### 基本信息")
