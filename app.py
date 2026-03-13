@@ -231,7 +231,17 @@ with tab_main:
                         output_bytes=None,
                     )
                 except Exception as e:
-                    st.error(f"分析失败：{e}")
+                    err_str = str(e)
+                    if "402" in err_str or "Insufficient Balance" in err_str:
+                        st.error("API 账户余额不足，请前往服务商平台充值后重试。")
+                    elif "401" in err_str or "Unauthorized" in err_str or "invalid api key" in err_str.lower():
+                        st.error("API Key 无效或已过期，请在「⚙️ 设置」中重新填写。")
+                    elif "429" in err_str or "rate limit" in err_str.lower():
+                        st.error("请求过于频繁（Rate Limit），请稍等片刻后重试。")
+                    elif "404" in err_str or "model" in err_str.lower() and "not found" in err_str.lower():
+                        st.error("模型名称不存在，请在「⚙️ 设置」中检查模型名称是否正确。")
+                    else:
+                        st.error(f"分析失败：{e}")
 
     # ── 第二步：审阅修改建议 ───────────────────────────────────────────────────
 
