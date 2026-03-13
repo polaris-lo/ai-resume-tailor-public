@@ -337,13 +337,13 @@ with tab_settings:
 
     with st.expander("💡 没有 API Key？点此查看各平台免费领取教程", expanded=False):
         st.markdown(
-            "| 平台 | 支持模型 | 免费额度 | 有效期 | 获取地址 |\n"
-            "|------|---------|---------|------|------|\n"
-            "| **字节火山引擎** | 豆包、DeepSeek、Kimi 等 | 每天 200 万 tokens（永久刷新） | 永久 | [console.volcengine.com/ark](https://console.volcengine.com/ark) |\n"
-            "| **阿里云百炼** | 通义千问、DeepSeek、Kimi 等 | 各模型 100 万 tokens | 3 个月 | [bailian.console.aliyun.com](https://bailian.console.aliyun.com) |\n"
-            "| **DeepSeek** | DeepSeek V3 / R1 | 注册送 10 元（约 500 万 tokens） | 1 个月 | [platform.deepseek.com](https://platform.deepseek.com) |\n"
-            "| **Kimi** | Kimi K2 系列 | 注册送 15 元 | 永久 | [platform.moonshot.cn](https://platform.moonshot.cn) |\n"
-            "| **MiniMax** | MiniMax M2 系列 | 注册送 15 元 | 永久 | [platform.minimaxi.com](https://platform.minimaxi.com) |\n"
+            "| 平台 | 支持模型 | 获取地址 |\n"
+            "|------|---------|------|\n"
+            "| **字节火山引擎** | 豆包、DeepSeek、Kimi 等 | [console.volcengine.com/ark](https://console.volcengine.com/ark) |\n"
+            "| **阿里云百炼** | 通义千问、DeepSeek、Kimi 等 | [bailian.console.aliyun.com](https://bailian.console.aliyun.com) |\n"
+            "| **DeepSeek** | DeepSeek V3 / R1 | [platform.deepseek.com](https://platform.deepseek.com) |\n"
+            "| **Kimi** | Kimi K2 系列 | [platform.moonshot.cn](https://platform.moonshot.cn) |\n"
+            "| **MiniMax** | MiniMax M2 系列 | [platform.minimaxi.com](https://platform.minimaxi.com) |\n"
             "\n"
             "**通用步骤（以 DeepSeek 为例）：**\n"
             "1. 打开上方链接 → 注册账号（手机号即可）\n"
