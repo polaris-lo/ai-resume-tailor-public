@@ -102,21 +102,28 @@ st.set_page_config(page_title="简历定制工具", page_icon="📄", layout="wi
 
 with st.sidebar:
     st.header("API 配置")
-    provider = st.selectbox("服务商", list(PRESET_APIS.keys()))
-    default_base_url, default_model = PRESET_APIS[provider]
+    _saved_key   = st.session_state.get("saved_api_key",  "")
+    _saved_url   = st.session_state.get("saved_base_url", "")
+    _saved_model = st.session_state.get("saved_model",    "")
 
-    _saved_url   = st.session_state.get("saved_base_url", "") or default_base_url
-    _saved_model = st.session_state.get("saved_model",    "") or default_model
+    if _saved_key and _saved_url and _saved_model:
+        provider_label = "自定义"
+        for _name, (_url, _) in PRESET_APIS.items():
+            if _url and _url == _saved_url:
+                provider_label = _name
+                break
+        st.success(f"✅ 已配置：{provider_label} · {_saved_model}")
+    else:
+        st.warning("尚未配置 API Key")
 
-    api_key    = st.text_input("API Key", type="password",
-                                value=st.session_state.get("saved_api_key", ""),
-                                placeholder="sk-...")
-    base_url   = st.text_input("Base URL", value=_saved_url)
-    model_name = st.text_input("模型", value=_saved_model)
-
+    st.caption("前往「⚙️ 设置」填写或修改配置。")
     st.divider()
     st.caption("API Key 仅在本次会话内存中使用，不会上传至服务器。")
-    st.caption("没有 Key？前往「⚙️ 设置」查看各平台免费领取教程。")
+
+# 从设置页保存的 session_state 读取 API 参数
+api_key    = st.session_state.get("saved_api_key",  "")
+base_url   = st.session_state.get("saved_base_url", "")
+model_name = st.session_state.get("saved_model",    "")
 
 # ── 主体：标签页 ──────────────────────────────────────────────────────────────
 
