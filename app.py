@@ -142,7 +142,18 @@ with tab_main:
     col1, col2 = st.columns(2)
 
     with col1:
-        uploaded_file = st.file_uploader("基础简历（.docx）", type=["docx"])
+        uploaded_file = st.file_uploader(
+            "基础简历（.docx）",
+            type=["docx"],
+            help=(
+                "请上传 Word .docx 格式（不支持 .doc / .pdf / .wps）。\n\n"
+                "**兼容性说明**\n"
+                "- 纯文字段落排版：完整支持，内容可自动修改\n"
+                "- 表格布局排版：支持读取（LLM 可看到内容），但表格内文字暂不支持自动改写\n"
+                "- 文本框、艺术字：无法读取\n\n"
+                "如遇兼容问题，建议将简历另存为「纯段落」格式后重新上传。"
+            ),
+        )
         job_name = st.text_input("岗位名称", placeholder="如：AI产品经理、数据分析师")
 
     with col2:
@@ -155,6 +166,11 @@ with tab_main:
 
     if not api_ready:
         st.info("请在左侧填写 API 配置（或在「⚙️ 设置」中保存配置）。")
+    else:
+        st.warning(
+            "⚠️ 分析和生成过程中请勿刷新或关闭页面，否则当前数据将丢失，需要重新开始。",
+            icon="⚠️",
+        )
 
     if st.button(
         "🔍 分析并生成修改建议",
@@ -172,6 +188,20 @@ with tab_main:
                     client = OpenAI(api_key=api_key, base_url=base_url)
                     resume_paras = get_resume_content(tmp_path)
                     modifications = _call_llm(client, model_name, jd_text, resume_paras)
+
+                    # 诊断：统计表格 vs 正文段落占比
+                    table_count  = sum(1 for p in resume_paras if p.get("in_table"))
+                    normal_count = sum(1 for p in resume_paras if not p.get("in_table"))
+                    if normal_count == 0:
+                        st.warning(
+                            "⚠️ 未检测到可修改的正文段落，简历可能全部采用表格排版。"
+                            "LLM 可以读取内容，但自动改写功能受限，建议将简历改为段落格式后重试。"
+                        )
+                    elif table_count > normal_count:
+                        st.info(
+                            f"ℹ️ 检测到简历以表格为主（{table_count} 行表格、{normal_count} 个正文段落）。"
+                            "表格内文字已提供给 LLM 参考，但自动改写仅作用于正文段落部分。"
+                        )
 
                     st.session_state.update(
                         resume_paras=resume_paras,

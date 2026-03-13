@@ -51,9 +51,15 @@ def _get_base_resume() -> Path:
 # ──────────────────────────────────────────────────────────────
 
 def get_resume_content(doc_path: Path) -> list[dict]:
-    """提取简历段落结构，跳过空行。"""
+    """提取简历段落结构，同时兼容表格布局。
+
+    返回两类条目：
+    - in_table=False：正文段落，有 index，可被 LLM 修改
+    - in_table=True ：表格单元格文字，index=-1，仅供 LLM 阅读，不可修改
+    """
     doc = Document(str(doc_path))
     result = []
+
     for i, para in enumerate(doc.paragraphs):
         if not para.text.strip():
             continue
@@ -61,7 +67,27 @@ def get_resume_content(doc_path: Path) -> list[dict]:
             "index": i,
             "is_header": para.style.name == "Normal",
             "text": para.text,
+            "in_table": False,
         })
+
+    # 提取表格内容（合并相邻重复单元格，避免 python-docx 的合并单元格重复读取）
+    seen = set()
+    for table in doc.tables:
+        for row in table.rows:
+            row_texts = []
+            for cell in row.cells:
+                cell_text = cell.text.strip()
+                if cell_text and cell_text not in seen:
+                    seen.add(cell_text)
+                    row_texts.append(cell_text)
+            if row_texts:
+                result.append({
+                    "index": -1,
+                    "is_header": False,
+                    "text": " | ".join(row_texts),
+                    "in_table": True,
+                })
+
     return result
 
 
@@ -77,6 +103,10 @@ _SYSTEM_PROMPT = """\
 2. 每个修改段落用 segments 表示，segments 是文本片段数组，每片段有 text 和 bold 两个字段
 3. bold=true 仅用于：技能类别名、条目类型词、关键数字/比例，绝不整句加粗
 4. 修改要简洁量化，突出与 JD 匹配的能力，风格与原简历一致
+
+【特别注意】
+- 简历中标注「表格内容」的部分仅供参考，不得出现在返回 JSON 中
+- JSON 中只能使用「正文段落」区域里列出的 index 编号
 
 【返回格式】
 只返回一个 JSON 数组，不要任何其他文字：
@@ -106,11 +136,19 @@ def _parse_llm_json(raw: str) -> list[dict]:
 
 
 def _build_resume_str(resume_paras: list[dict]) -> str:
-    lines = []
+    normal_lines = []
+    table_lines = []
     for p in resume_paras:
-        tag = "[节标题]" if p["is_header"] else "       "
-        lines.append(f"  {p['index']:2d}. {tag} {p['text']}")
-    return "\n".join(lines)
+        if p.get("in_table"):
+            table_lines.append(f"  {p['text']}")
+        else:
+            tag = "[节标题]" if p["is_header"] else "       "
+            normal_lines.append(f"  {p['index']:2d}. {tag} {p['text']}")
+
+    parts = ["【正文段落（可修改，使用上方 index 编号）】"] + normal_lines
+    if table_lines:
+        parts += ["", "【表格内容（仅供参考，不可修改，不得出现在 JSON 中）】"] + table_lines
+    return "\n".join(parts)
 
 
 def call_llm(jd: str, resume_paras: list[dict]) -> list[dict]:
