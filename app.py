@@ -24,13 +24,16 @@ from resume_tailor.src.resume_tailor import (
 # ── API 服务商预设 ────────────────────────────────────────────────────────────
 
 PRESET_APIS = {
-    "DeepSeek":  ("https://api.deepseek.com",                           "deepseek-chat"),
-    "通义千问":   ("https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-max"),
-    "Kimi":      ("https://api.moonshot.cn/v1",                         "moonshot-v1-8k"),
-    "MiniMax":   ("https://api.minimax.chat/v1",                        "MiniMax-Text-01"),
-    "火山引擎":   ("https://ark.cn-beijing.volces.com/api/v3",           ""),  # 模型名因 endpoint 而异
-    "OpenAI":    ("https://api.openai.com/v1",                          "gpt-4o"),
-    "自定义":    ("", ""),
+    "🆓 智谱 GLM-4-Flash（永久免费）":  ("https://open.bigmodel.cn/api/paas/v4/",                           "glm-4-flash"),
+    "🆓 硅基流动（注册送额度）":         ("https://api.siliconflow.cn/v1",                                  "Qwen/Qwen2.5-7B-Instruct"),
+    "🆓 Google Gemini（需 VPN）":       ("https://generativelanguage.googleapis.com/v1beta/openai/",        "gemini-2.0-flash"),
+    "DeepSeek":                         ("https://api.deepseek.com",                                        "deepseek-chat"),
+    "通义千问":                          ("https://dashscope.aliyuncs.com/compatible-mode/v1",               "qwen-max"),
+    "Kimi":                             ("https://api.moonshot.cn/v1",                                      "moonshot-v1-8k"),
+    "MiniMax":                          ("https://api.minimax.chat/v1",                                     "MiniMax-Text-01"),
+    "火山引擎":                          ("https://ark.cn-beijing.volces.com/api/v3",                        ""),  # 模型名因 endpoint 而异
+    "OpenAI":                           ("https://api.openai.com/v1",                                       "gpt-4o"),
+    "自定义":                            ("", ""),
 }
 
 # ── LLM 调用 ──────────────────────────────────────────────────────────────────
@@ -359,8 +362,29 @@ with tab_settings:
     st.subheader("⚙️ 设置")
     st.caption("设置仅在本次会话内有效，关闭或刷新页面后需重新填写。")
 
-    with st.expander("💡 没有 API Key？点此查看各平台免费领取教程", expanded=False):
+    with st.expander("💡 没有 API Key？点此查看获取教程", expanded=False):
         st.markdown(
+            "### ✅ 完全免费，注册即用（推荐新用户）\n"
+            "\n"
+            "**智谱 GLM-4-Flash（国内直连，永久免费）**\n"
+            "1. 打开 [open.bigmodel.cn](https://open.bigmodel.cn) → 注册账号（手机号即可）\n"
+            "2. 登录后进入「API Keys」→「新建 API Key」\n"
+            "3. 复制 key，粘贴到下方「API Key」输入框；「服务商」选「🆓 智谱 GLM-4-Flash（永久免费）」\n"
+            "\n"
+            "**硅基流动（国内直连，注册送 14 元额度）**\n"
+            "1. 打开 [cloud.siliconflow.cn](https://cloud.siliconflow.cn) → 注册账号\n"
+            "2. 登录后进入「API 密钥」→「新建 API 密钥」\n"
+            "3. 复制 key；「服务商」选「🆓 硅基流动（注册送额度）」\n"
+            "\n"
+            "**Google Gemini（需 VPN，每天 1500 次免费）**\n"
+            "1. 打开 [aistudio.google.com](https://aistudio.google.com) → 用 Google 账号登录\n"
+            "2. 点击「Get API key」→「Create API key」\n"
+            "3. 复制 key；「服务商」选「🆓 Google Gemini（需 VPN）」\n"
+            "\n"
+            "---\n"
+            "\n"
+            "### 💳 需要充值 / 付费的平台\n"
+            "\n"
             "| 平台 | 支持模型 | 获取地址 |\n"
             "|------|---------|------|\n"
             "| **字节火山引擎** | 豆包、DeepSeek、Kimi 等 | [console.volcengine.com/ark](https://console.volcengine.com/ark) |\n"
@@ -369,11 +393,7 @@ with tab_settings:
             "| **Kimi** | Kimi K2 系列 | [platform.moonshot.cn](https://platform.moonshot.cn) |\n"
             "| **MiniMax** | MiniMax M2 系列 | [platform.minimaxi.com](https://platform.minimaxi.com) |\n"
             "\n"
-            "**通用步骤（以 DeepSeek 为例）：**\n"
-            "1. 打开上方链接 → 注册账号（手机号即可）\n"
-            "2. 登录后进入「API Keys」→「创建 API Key」\n"
-            "3. 复制生成的 key（`sk-` 开头），粘贴到下方「API Key」输入框\n"
-            "4. 在「服务商」下拉框选择对应平台，Base URL 和模型名称会自动填入\n"
+            "**通用步骤：** 注册 → 进入「API Keys」→ 创建并复制 key → 粘贴到下方输入框，选择对应服务商。\n"
         )
 
     with st.form("settings_form"):
