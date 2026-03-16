@@ -29,7 +29,10 @@ python setup.py   # 配置姓名、简历路径、LLM API Key
 ## 运行命令
 
 ```bash
-# 根据 JD 生成定制版简历
+# Web 界面（主要入口）
+streamlit run app.py
+
+# CLI 模式
 cd resume_tailor
 python main.py "JD文本内容" --name "AI产品经理"
 python main.py --jd-file jd.txt --name "数据分析师"
@@ -40,24 +43,44 @@ python main.py --jd-file jd.txt --name "数据分析师"
 
 ```
 ai-resume-tailor-public/
-├── setup.py              首次运行配置向导
+├── app.py                Web 界面入口（Streamlit）
+├── setup.py              CLI 首次运行配置向导
 ├── config.py             配置加载模块（读取 ~/.resume-tailor/config.json）
-├── output/               所有生成版本
+├── output/               CLI 模式生成的简历
 └── resume_tailor/
     ├── main.py           CLI 入口
     └── src/
-        └── resume_tailor.py    核心逻辑（读取段落 → 调 LLM → 修改 docx）
+        ├── resume_tailor.py    核心 LLM 逻辑
+        └── ats_generator.py    ATS 格式 docx 生成器
 ```
 
 ## 核心架构
 
-### resume_tailor
+### 两套入口，共用同一套 LLM 逻辑
 
-读取基础简历所有段落（带 index），通过 OpenAI 兼容 API 分析 JD 匹配点，返回 JSON 修改列表：
+**Web 界面**（主要入口）：`app.py` → Streamlit 多标签页，用户上传 .docx + 粘贴 JD → 调用 `call_llm_ats` → 展示 diff 审阅 → `AtsGenerator.generate()` 输出新 docx。
+
+**CLI**：`resume_tailor/main.py` → 读取 `~/.resume-tailor/config.json` → 调用旧版 `call_llm`（段落替换流程）→ `apply_modifications` 原地修改基础简历。
+
+### ATS 流程（Web 界面使用）
+
+`call_llm_ats(jd, resume_text)` → 第一次 LLM 调用，返回结构化 profile JSON → `_verify_profile(...)` 第二次 LLM 调用核查编造内容和标签丢失 → `compute_changes(profile, resume_text)` 用 difflib 计算改动 diff → `AtsGenerator(profile).generate(path)` 生成 ATS 格式 docx。
+
+profile JSON 结构：
 ```json
-[{"para_index": N, "reason": "...", "segments": [{"text": "...", "bold": bool}]}]
+{
+  "basic_info": {"name": "", "phone": "", "email": "", "other": []},
+  "education": [{"school": "", "degree": "", "major": "", ...}],
+  "skills": {"技能类别": "描述"},
+  "work_experience": [{"company": "", "title": "", "bullets": []}],
+  "projects": [{"name": "", "bullets": []}],
+  "awards": [{"date": "", "name": ""}]
+}
 ```
-然后 `apply_modifications` 复制基础简历，按 `para_index` 精确替换段落内容，同时清理空段落和嵌入 `sectPr`。
+
+### CLI 旧流程（仅 CLI 使用）
+
+读取基础简历所有段落（带 index），LLM 返回修改列表，`apply_modifications` 按 `para_index` 精确替换段落内容，同时清理空段落和嵌入 `sectPr`。
 
 用户配置存储在 `~/.resume-tailor/config.json`（项目外，不提交）：
 ```json
@@ -98,4 +121,3 @@ for attr in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
 | 命令 | 定义文件 | 功能 |
 |------|----------|------|
 | `/resume-tailor` | `.claude/commands/resume-tailor.md` | 根据 JD 生成定制版简历 |
-| `/boss-greet` | `.claude/commands/boss-greet.md` | 生成 BOSS 直聘打招呼消息 |

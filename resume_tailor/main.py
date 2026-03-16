@@ -48,7 +48,6 @@ def tailor(
         call_llm,
         call_llm_with_feedback,
         format_modifications,
-        generate_greeting,
         get_resume_content,
         suggest_job_name,
         tailor_resume,
@@ -125,14 +124,6 @@ def tailor(
     typer.echo(f"\n输出文件：{output.resolve()}")
     typer.echo("请在 Word 中打开检查后，手动导出 PDF。")
 
-    # 可选：生成打招呼消息
-    typer.echo("\n是否需要生成 BOSS 直聘打招呼消息？(y/N) ", nl=False)
-    if input().strip().lower() == "y":
-        typer.echo("\n正在生成打招呼消息...\n")
-        greeting = generate_greeting(jd, resume_paras)
-        typer.echo("─" * 60)
-        typer.echo(greeting)
-        typer.echo("─" * 60)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ dist/
 *.key
 .env
 .env.*
+.streamlit/secrets.toml
 
 # 简历文件（通过路径引用，不提交原文件）
 *.docx
